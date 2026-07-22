@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Barcode Country Scanner</title>
   
-  <!-- Manifest pour transformer la page en PWA -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0f172a">
 
@@ -20,73 +19,126 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
-    body {
+    html, body {
+      width: 100%;
+      overflow-x: hidden; /* Empêche tout défilement horizontal */
       background-color: #0f172a;
       color: #f8fafc;
+    }
+
+    body {
       display: flex;
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
-      padding: 20px;
+      padding: 12px;
     }
 
     header {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
+      width: 100%;
     }
 
     h1 {
-      font-size: 1.5rem;
-      margin-bottom: 6px;
+      font-size: clamp(1.2rem, 5vw, 1.6rem);
       color: #38bdf8;
     }
 
     p {
       color: #94a3b8;
-      font-size: 0.9rem;
+      font-size: clamp(0.8rem, 3.5vw, 0.9rem);
+    }
+
+    /* Zone du scanner adaptable */
+    .scanner-wrapper {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
     }
 
     #reader {
-      width: 100%;
-      max-width: 480px;
+      width: 100% !important;
       background: #1e293b;
-      border-radius: 12px;
+      border-radius: 16px;
       overflow: hidden;
       border: 2px solid #334155;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Correction stricte du flux vidéo pour mobile */
+    #reader video {
+      width: 100% !important;
+      height: auto !important;
+      max-height: 60vh;
+      object-fit: cover !important;
+      border-radius: 14px;
+    }
+
+    /* Masquage des éléments parasites générés par la bibliothèque */
+    #reader__dashboard_section, 
+    #reader__status_span {
+      padding: 8px !important;
+      font-size: 0.85rem !important;
+      color: #94a3b8 !important;
+    }
+
+    #reader img {
+      display: none !important; /* Cache l'image d'aide par défaut */
     }
 
     .result-card {
       width: 100%;
-      max-width: 480px;
-      margin-top: 20px;
+      margin-top: 12px;
       background: #1e293b;
-      border-radius: 12px;
-      padding: 20px;
+      border-radius: 16px;
+      padding: 16px;
       border: 1px solid #334155;
       display: none;
     }
 
     .result-card.active {
       display: block;
-      animation: fadeIn 0.3s ease-in-out;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    .label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 8px;
+    }
+
+    .label:first-child {
+      margin-top: 0;
     }
 
     .barcode-val {
       font-family: monospace;
-      font-size: 1.2rem;
+      font-size: clamp(1.1rem, 4vw, 1.3rem);
       color: #38bdf8;
-      margin-bottom: 8px;
+      font-weight: 600;
+      word-break: break-all;
     }
 
     .country-val {
-      font-size: 1.4rem;
+      font-size: clamp(1.2rem, 4.5vw, 1.4rem);
       font-weight: bold;
       color: #4ade80;
     }
 
+    .tiktok-link {
+      display: inline-block;
+      margin-top: 12px;
+      color: #38bdf8;
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
     }
   </style>
@@ -98,17 +150,23 @@
     <p>Point your camera at a barcode (EAN-13)</p>
   </header>
 
-  <div id="reader"></div>
+  <div class="scanner-wrapper">
+    <div id="reader"></div>
 
-  <div id="result" class="result-card">
-    <p>Scanned Code:</p>
-    <div id="barcodeOutput" class="barcode-val">-</div>
-    <p>GS1 Registered Country:</p>
-    <div id="countryOutput" class="country-val">-</div>
+    <div id="result" class="result-card">
+      <div class="label">Scanned Code</div>
+      <div id="barcodeOutput" class="barcode-val">-</div>
+      
+      <div class="label">GS1 Registered Country</div>
+      <div id="countryOutput" class="country-val">-</div>
+
+      <a id="tiktokSearch" href="#" target="_blank" class="tiktok-link">
+        🔍 Search product on TikTok
+      </a>
+    </div>
   </div>
 
   <script>
-    // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
@@ -117,39 +175,52 @@
       });
     }
 
-    // GS1 Prefix Database
+    // Calcul réactif de la zone de visée (qrbox)
+    function calculateQrboxSize(viewfinderWidth, viewfinderHeight) {
+      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      const size = Math.floor(minEdge * 0.75);
+      return {
+        width: Math.max(size, 180),
+        height: Math.floor(Math.max(size, 180) * 0.55)
+      };
+    }
+
     function getCountryFromEAN(code) {
       if (!code || code.length < 3) return "Invalid Code";
 
       const prefix = parseInt(code.substring(0, 3), 10);
 
-      if (prefix >= 0 && prefix <= 139) return " /  USA or Canada";
-      if (prefix >= 300 && prefix <= 379) return " France";
-      if (prefix >= 400 && prefix <= 440) return " Germany";
-      if (prefix >= 450 && prefix <= 459 || prefix >= 490 && prefix <= 499) return " Japan";
-      if (prefix >= 500 && prefix <= 509) return " United Kingdom";
-      if (prefix >= 540 && prefix <= 549) return " /  Belgium or Luxembourg";
-      if (prefix >= 570 && prefix <= 579) return " Denmark";
-      if (prefix >= 600 && prefix <= 601) return " South Africa";
-      if (prefix >= 690 && prefix <= 699) return " China";
-      if (prefix >= 700 && prefix <= 709) return " Norway";
-      if (prefix >= 730 && prefix <= 739) return " Sweden";
-      if (prefix >= 760 && prefix <= 769) return " Switzerland";
-      if (prefix >= 800 && prefix <= 839) return " Italy";
-      if (prefix >= 840 && prefix <= 849) return " Spain";
-      if (prefix >= 870 && prefix <= 879) return " Netherlands";
-      if (prefix === 885) return " Thailand";
-      if (prefix === 888) return " Singapore";
-      if (prefix === 890) return " India";
-      if (prefix >= 900 && prefix <= 919) return " Austria";
-      if (prefix >= 930 && prefix <= 939) return " Australia";
+      if (prefix >= 0 && prefix <= 139) return "🇺🇸 / 🇨🇦 USA or Canada";
+      if (prefix >= 300 && prefix <= 379) return "🇫🇷 France";
+      if (prefix >= 400 && prefix <= 440) return "🇩🇪 Germany";
+      if (prefix >= 450 && prefix <= 459 || prefix >= 490 && prefix <= 499) return "🇯🇵 Japan";
+      if (prefix >= 500 && prefix <= 509) return "🇬🇧 United Kingdom";
+      if (prefix >= 540 && prefix <= 549) return "🇧🇪 / 🇱🇺 Belgium or Luxembourg";
+      if (prefix >= 570 && prefix <= 579) return "🇩🇰 Denmark";
+      if (prefix >= 600 && prefix <= 601) return "🇿🇦 South Africa";
+      if (prefix >= 690 && prefix <= 699) return "🇨🇳 China";
+      if (prefix >= 700 && prefix <= 709) return "🇳🇴 Norway";
+      if (prefix >= 730 && prefix <= 739) return "🇸🇪 Sweden";
+      if (prefix >= 760 && prefix <= 769) return "🇨🇭 Switzerland";
+      if (prefix >= 800 && prefix <= 839) return "🇮🇹 Italy";
+      if (prefix >= 840 && prefix <= 849) return "🇪🇸 Spain";
+      if (prefix >= 870 && prefix <= 879) return "🇳🇱 Netherlands";
+      if (prefix === 885) return "🇹🇭 Thailand";
+      if (prefix === 888) return "🇸🇬 Singapore";
+      if (prefix === 890) return "🇮🇳 India";
+      if (prefix >= 900 && prefix <= 919) return "🇦🇹 Austria";
+      if (prefix >= 930 && prefix <= 939) return "🇦🇺 Australia";
 
-      return " Unknown country or unassigned prefix";
+      return "🌍 Unknown country or unassigned prefix";
     }
 
-    function onScanSuccess(decodedText, decodedResult) {
+    function onScanSuccess(decodedText) {
       document.getElementById("barcodeOutput").textContent = decodedText;
       document.getElementById("countryOutput").textContent = getCountryFromEAN(decodedText);
+      
+      const tiktokLink = document.getElementById("tiktokSearch");
+      tiktokLink.href = `https://www.tiktok.com/search?q=${encodeURIComponent(decodedText)}`;
+
       document.getElementById("result").classList.add("active");
     }
 
@@ -157,7 +228,7 @@
       "reader",
       { 
         fps: 10, 
-        qrbox: { width: 250, height: 150 },
+        qrbox: calculateQrboxSize,
         experimentalFeatures: { useBarCodeDetectorIfSupported: true }
       },
       false
