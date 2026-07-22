@@ -6,52 +6,60 @@
   <title>Scanner</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
+    /* LE BLINDAGE CSS */
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
     html, body {
-      height: 100dvh;
+      height: 100%;
       width: 100%;
-      overflow: hidden;
+      overflow: hidden; /* Empêche le défilement */
       background: #000;
-      position: fixed;
+      position: fixed; /* Fixe la position */
+      touch-action: none; /* Désactive les gestes tactiles */
+      overscroll-behavior: none; /* Désactive le rebond iOS/Android */
     }
+
     .container {
+      width: 100vw;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      height: 100%;
-      padding: 10px;
     }
+
     #reader {
       flex: 1;
-      border-radius: 10px;
-      overflow: hidden;
+      width: 100%;
+      position: relative;
     }
+
+    /* Force la vidéo à remplir le conteneur sans déborder */
     #reader video {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
     }
-    .results {
-      padding: 10px;
-      background: #222;
-      color: white;
-      border-radius: 10px;
-      margin-top: 10px;
-    }
+
+    /* Cache tout ce qui n'est pas la vidéo */
+    #reader__dashboard_section, #reader__status_span { display: none !important; }
   </style>
 </head>
 <body>
   <div class="container">
     <div id="reader"></div>
-    <div class="results" id="result" style="display:none">
-      Code: <span id="val">-</span>
-    </div>
   </div>
+
   <script>
-    function onScan(text) {
-      document.getElementById('result').style.display = 'block';
-      document.getElementById('val').textContent = text;
-    }
-    new Html5QrcodeScanner("reader", { fps: 10, qrbox: 200 }, false).render(onScan);
+    // Initialisation forcée
+    const scanner = new Html5Qrcode("reader");
+    scanner.start(
+      { facingMode: "environment" }, 
+      { fps: 10, qrbox: 250 },
+      (decodedText) => {
+        alert("Code: " + decodedText);
+      }
+    ).catch(err => {
+      console.log("Erreur : " + err);
+    });
   </script>
 </body>
 </html>
