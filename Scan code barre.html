@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barcode Scanner</title>
   
-  <!-- Bibliothèque de scan -->
+  <!-- Chargement de la bibliothèque -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
   <style>
@@ -130,13 +130,17 @@
       document.getElementById("countryOutput").textContent = getCountryFromEAN(decodedText);
     }
 
-    const html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader",
-      { fps: 10, qrbox: { width: 250, height: 150 } },
-      false
-    );
-
-    html5QrcodeScanner.render(onScanSuccess);
+    // On attend l'affichage complet du HTML avant d'exécuter le script
+    window.onload = function() {
+      if (typeof Html5QrcodeScanner !== 'undefined') {
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+          "reader",
+          { fps: 10, qrbox: { width: 250, height: 150 } },
+          false
+        );
+        html5QrcodeScanner.render(onScanSuccess);
+      }
+    };
   </script>
 </body>
 </html>
