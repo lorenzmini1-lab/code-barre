@@ -1,5 +1,5 @@
 {
-  "name": "Barcode Country Scanner",
+  "name": "Barcode Scanner",
   "short_name": "Scanner",
   "start_url": "./index.html",
   "display": "standalone",
