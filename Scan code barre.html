@@ -3,63 +3,214 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Scanner</title>
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <title>Barcode Scanner</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+
+  <!-- Library HTML5-QRCode -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
   <style>
-    /* LE BLINDAGE CSS */
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    
-    html, body {
-      height: 100%;
-      width: 100%;
-      overflow: hidden; /* Empêche le défilement */
-      background: #000;
-      position: fixed; /* Fixe la position */
-      touch-action: none; /* Désactive les gestes tactiles */
-      overscroll-behavior: none; /* Désactive le rebond iOS/Android */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
-    .container {
-      width: 100vw;
-      height: 100vh;
+    /* Verrouillage strict anti-scroll et anti-rebond */
+    html, body {
+      height: 100dvh;
+      width: 100%;
+      overflow: hidden;
+      background-color: #0f172a;
+      color: #f8fafc;
+      position: fixed;
+      touch-action: none;
+      overscroll-behavior: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+    }
+
+    header {
+      flex-shrink: 0;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      font-size: 1.2rem;
+      color: #38bdf8;
+    }
+
+    p {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    .scanner-wrapper {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    #reader {
+      flex-grow: 1;
+      background: #1e293b;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 2px solid #334155;
       display: flex;
       flex-direction: column;
     }
 
-    #reader {
-      flex: 1;
-      width: 100%;
-      position: relative;
-    }
-
-    /* Force la vidéo à remplir le conteneur sans déborder */
     #reader video {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
     }
 
-    /* Cache tout ce qui n'est pas la vidéo */
-    #reader__dashboard_section, #reader__status_span { display: none !important; }
+    #reader__dashboard_section, 
+    #reader__status_span {
+      padding: 4px !important;
+      font-size: 0.8rem !important;
+      color: #94a3b8 !important;
+    }
+
+    #reader img {
+      display: none !important;
+    }
+
+    .result-card {
+      flex-shrink: 0;
+      margin-top: 8px;
+      background: #1e293b;
+      border-radius: 14px;
+      padding: 10px 14px;
+      border: 1px solid #334155;
+      display: none;
+    }
+
+    .result-card.active {
+      display: block;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    .label {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .barcode-val {
+      font-family: monospace;
+      font-size: 0.95rem;
+      color: #38bdf8;
+      font-weight: 600;
+      word-break: break-all;
+    }
+
+    .country-val {
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #4ade80;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
+
+  <header>
+    <h1>Barcode Scanner</h1>
+    <p>Point your camera at a barcode (EAN-13)</p>
+  </header>
+
+  <div class="scanner-wrapper">
     <div id="reader"></div>
+
+    <div id="result" class="result-card">
+      <div class="label">Scanned Code</div>
+      <div id="barcodeOutput" class="barcode-val">-</div>
+      
+      <div class="label" style="margin-top: 4px;">GS1 Registered Country</div>
+      <div id="countryOutput" class="country-val">-</div>
+    </div>
   </div>
 
   <script>
-    // Initialisation forcée
-    const scanner = new Html5Qrcode("reader");
-    scanner.start(
-      { facingMode: "environment" }, 
-      { fps: 10, qrbox: 250 },
-      (decodedText) => {
-        alert("Code: " + decodedText);
-      }
-    ).catch(err => {
-      console.log("Erreur : " + err);
-    });
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(() => console.log('Service Worker Registered'))
+          .catch((err) => console.error('Service Worker Error:', err));
+      });
+    }
+
+    function calculateQrboxSize(viewfinderWidth, viewfinderHeight) {
+      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+      const size = Math.floor(minEdge * 0.7);
+      return {
+        width: Math.max(size, 160),
+        height: Math.floor(Math.max(size, 160) * 0.5)
+      };
+    }
+
+    function getCountryFromEAN(code) {
+      if (!code || code.length < 3) return "Invalid Code";
+      const prefix = parseInt(code.substring(0, 3), 10);
+
+      if (prefix >= 0 && prefix <= 139) return "🇺🇸 / 🇨🇦 USA or Canada";
+      if (prefix >= 300 && prefix <= 379) return "🇫🇷 France";
+      if (prefix >= 400 && prefix <= 440) return "🇩🇪 Germany";
+      if (prefix >= 450 && prefix <= 459 || prefix >= 490 && prefix <= 499) return "🇯🇵 Japan";
+      if (prefix >= 500 && prefix <= 509) return "🇬🇧 United Kingdom";
+      if (prefix >= 540 && prefix <= 549) return "🇧🇪 / 🇱🇺 Belgium or Luxembourg";
+      if (prefix >= 570 && prefix <= 579) return "🇩🇰 Denmark";
+      if (prefix >= 600 && prefix <= 601) return "🇿🇦 South Africa";
+      if (prefix >= 690 && prefix <= 699) return "🇨🇳 China";
+      if (prefix >= 700 && prefix <= 709) return "🇳🇴 Norway";
+      if (prefix >= 730 && prefix <= 739) return "🇸🇪 Sweden";
+      if (prefix >= 760 && prefix <= 769) return "🇨🇭 Switzerland";
+      if (prefix >= 800 && prefix <= 839) return "🇮🇹 Italy";
+      if (prefix >= 840 && prefix <= 849) return "🇪🇸 Spain";
+      if (prefix >= 870 && prefix <= 879) return "🇳🇱 Netherlands";
+      if (prefix === 885) return "🇹🇭 Thailand";
+      if (prefix === 888) return "🇸🇬 Singapore";
+      if (prefix === 890) return "🇮🇳 India";
+      if (prefix >= 900 && prefix <= 919) return "🇦🇹 Austria";
+      if (prefix >= 930 && prefix <= 939) return "🇦🇺 Australia";
+
+      return "🌍 Unknown country or unassigned prefix";
+    }
+
+    function onScanSuccess(decodedText) {
+      document.getElementById("barcodeOutput").textContent = decodedText;
+      document.getElementById("countryOutput").textContent = getCountryFromEAN(decodedText);
+      document.getElementById("result").classList.add("active");
+    }
+
+    const html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader",
+      { 
+        fps: 10, 
+        qrbox: calculateQrboxSize,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      },
+      false
+    );
+
+    html5QrcodeScanner.render(onScanSuccess);
   </script>
 </body>
 </html>
